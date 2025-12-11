@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+source "${DOTLY_PATH:-$PWD}/scripts/core/_main.sh"
+
+DOTLY_SETTINGS_PATH=${2:-"${DOTFILES_PATH}/os/linux/settings"}
+
+##? Linux desktop defaults: keyboard layouts & shortcuts (no display config)
+##?
+##? Usage:
+##?   defaults export [<path_to>]
+##?   defaults import [<path_from>]
+##?
+##? By default it reads/writes from "$DOTFILES_PATH/os/linux/settings".
+
+docs::parse "$@"
+
+case "$1" in
+  "export")
+    export_path="${DOTLY_SETTINGS_PATH}"
+    [[ -d "$export_path" ]] || mkdir -p "$export_path"
+
+    # Keyboard layouts (GNOME / Cinnamon)
+    if command -v dconf >/dev/null 2>&1; then
+      dconf dump /org/gnome/desktop/input-sources/ \
+        >"$export_path/gnome-input-sources.dconf" 2>/dev/null || true
+
+      # Cinnamon desktop keybindings (Linux Mint)
+      dconf dump /org/cinnamon/desktop/keybindings/ \
+        >"$export_path/cinnamon-keybindings.dconf" 2>/dev/null || true
+    else
+      echo "[linux-defaults] dconf not available, cannot export keyboard layouts/shortcuts" >&2
+    fi
+    ;;
+
+  "import")
+    import_path="${DOTLY_SETTINGS_PATH}"
+
+    if command -v dconf >/dev/null 2>&1; then
+      if [[ -f "$import_path/gnome-input-sources.dconf" ]]; then
+        echo "[linux-defaults] Importing GNOME keyboard input sources"
+        dconf load /org/gnome/desktop/input-sources/ \
+          <"$import_path/gnome-input-sources.dconf" 2>/dev/null || true
+      fi
+
+      if [[ -f "$import_path/cinnamon-keybindings.dconf" ]]; then
+        echo "[linux-defaults] Importing Cinnamon keybindings"
+        dconf load /org/cinnamon/desktop/keybindings/ \
+          <"$import_path/cinnamon-keybindings.dconf" 2>/dev/null || true
+      fi
+    else
+      echo "[linux-defaults] dconf not available, cannot import keyboard layouts/shortcuts" >&2
+    fi
+    ;;
+
+  *)
+    exit 1
+    ;;
+esac

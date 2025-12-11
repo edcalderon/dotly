@@ -8,6 +8,11 @@ if [ -n "${DOTFILES_PATH:-}" ] && [ -f "$DOTFILES_PATH/os/linux/.dotly" ]; then
   . "$DOTFILES_PATH/os/linux/.dotly"
 fi
 
+# Try to infer DOTLY_PATH if not already set (typical layout: modules/dotly)
+if [ -z "${DOTLY_PATH:-}" ] && [ -n "${DOTFILES_PATH:-}" ] && [ -d "$DOTFILES_PATH/modules/dotly" ]; then
+  DOTLY_PATH="$DOTFILES_PATH/modules/dotly"
+fi
+
 install_yakuake() {
   if command -v yakuake >/dev/null 2>&1; then
     echo "[yakuake] Already installed"
@@ -566,6 +571,11 @@ main() {
   pin_browsers_to_panel
   install_nvidia_drivers
   install_nvm_node
+
+  # Apply stored Linux defaults (keyboard layouts & shortcuts) if script exists
+  if [ -n "${DOTLY_PATH:-}" ] && [ -x "$DOTLY_PATH/scripts/linux/defaults" ]; then
+    "$DOTLY_PATH/scripts/linux/defaults" import || true
+  fi
 
   echo "[restore] Done. Some changes (like docker group membership or drivers) may require a reboot or re-login."
 }

@@ -33,6 +33,47 @@ Shared Linux helpers live in:
 
 ---
 
+## Installed apps (via default Linux restoration)
+
+The script `01-default_linux_restoration.sh` installs
+and configures (best‑effort, mainly tested on Linux
+Mint):
+
+- **Terminal & shell**
+  - Yakuake (with autostart enabled)
+  - `st` terminal (suckless, built from source)
+  - Zsh + Oh My Zsh (`agnoster` theme)
+  - Powerline‑compatible fonts (Fira Code, powerline)
+
+- **Browsers**
+  - Chromium
+  - Google Chrome
+  - Brave Browser
+  - GNOME Web (Epiphany)
+
+- **Productivity & utilities**
+  - Dropbox (nautilus‑dropbox / dropbox, where
+    available)
+  - KeepassXC
+  - Super Productivity (best‑effort via Flatpak;
+    may require manual install if not found)
+
+- **Developer tools**
+  - Docker (`docker.io` on apt‑based systems)
+  - Visual Studio Code
+  - `nvm` + Node.js `22.18.0` (set as default)
+
+- **System & drivers**
+  - NVIDIA GPU drivers (Ubuntu/Mint best‑effort via
+    `ubuntu-drivers`)
+  - Keyboard layouts: US + Spanish (Latin America)
+  - Cinnamon panel favorites: main browsers pinned
+
+Everything is written to be safe to re‑run: already
+installed apps are usually detected and skipped.
+
+---
+
 ## Target environment
 
 - **Primary**: Linux Mint (Ubuntu‑based), clean
