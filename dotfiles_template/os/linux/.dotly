@@ -1,1 +1,38 @@
-dotly installed on Linux!
+#!/usr/bin/env bash
+
+# Shared helpers for Linux environments
+
+detect_package_manager() {
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "apt"
+  elif command -v dnf >/dev/null 2>&1; then
+    echo "dnf"
+  elif command -v pacman >/dev/null 2>&1; then
+    echo "pacman"
+  else
+    echo "unknown"
+  fi
+}
+
+pkg_install() {
+  local pkg_manager=$1
+  shift
+
+  case "$pkg_manager" in
+    apt)
+      sudo apt-get update -y
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+      ;;
+    dnf)
+      sudo dnf install -y "$@"
+      ;;
+    pacman)
+      sudo pacman -Sy --noconfirm --needed "$@"
+      ;;
+    *)
+      echo "Unsupported package manager. Please install packages manually: $*" >&2
+      ;;
+  esac
+}
+
+echo "dotly installed on Linux!"
