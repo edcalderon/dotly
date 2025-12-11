@@ -27,3 +27,18 @@ prompt ${DOTLY_THEME:-codely}
 source "$DOTLY_PATH/shell/zsh/bindings/dot.zsh"
 source "$DOTLY_PATH/shell/zsh/bindings/reverse_search.zsh"
 source "$DOTFILES_PATH/shell/zsh/key-bindings.zsh"
+
+# NVM (Node Version Manager)
+if [ -z "${NVM_DIR:-}" ]; then
+    export NVM_DIR="$HOME/.nvm"
+fi
+
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$NVM_DIR/nvm.sh"
+fi
+
+if [ -s "$NVM_DIR/bash_completion" ]; then
+    # shellcheck source=/dev/null
+    . "$NVM_DIR/bash_completion"
+fi
