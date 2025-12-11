@@ -267,6 +267,212 @@ install_chromium() {
   esac
 }
 
+install_gnome_web() {
+  if command -v epiphany-browser >/dev/null 2>&1; then
+    echo "[gnome-web] Already installed"
+    return 0
+  fi
+
+  local pm
+  pm=$(detect_package_manager)
+
+  case "$pm" in
+    apt)
+      pkg_install "$pm" epiphany-browser || true
+      ;;
+    dnf)
+      echo "[gnome-web] Please install epiphany / gnome-web via your distro packages" >&2
+      ;;
+    pacman)
+      echo "[gnome-web] Please install epiphany / gnome-web (e.g. from community/aur)" >&2
+      ;;
+    *)
+      echo "[gnome-web] Please install GNOME Web manually" >&2
+      ;;
+  esac
+}
+
+install_dropbox() {
+  if command -v dropbox >/dev/null 2>&1; then
+    echo "[dropbox] Already installed"
+    return 0
+  fi
+
+  local pm
+  pm=$(detect_package_manager)
+
+  case "$pm" in
+    apt)
+      # On Ubuntu/Mint this is usually provided as nautilus-dropbox or dropbox
+      pkg_install "$pm" nautilus-dropbox || pkg_install "$pm" dropbox || true
+      ;;
+    dnf|pacman)
+      echo "[dropbox] Please install Dropbox using your distro packages or the official .deb/.rpm package" >&2
+      ;;
+    *)
+      echo "[dropbox] Please install Dropbox manually" >&2
+      ;;
+  esac
+}
+
+install_chrome() {
+  if command -v google-chrome >/dev/null 2>&1 || command -v google-chrome-stable >/dev/null 2>&1; then
+    echo "[chrome] Already installed"
+    return 0
+  fi
+
+  local pm
+  pm=$(detect_package_manager)
+
+  case "$pm" in
+    apt)
+      pkg_install "$pm" wget gpg ca-certificates || true
+      wget -qO- https://dl.google.com/linux/linux_signing_key.pub | \
+        gpg --dearmor | sudo tee /usr/share/keyrings/google-chrome.gpg >/dev/null || true
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" | \
+        sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null || true
+      sudo apt-get update -y || true
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y google-chrome-stable || true
+      ;;
+    dnf|pacman)
+      echo "[chrome] Please install Google Chrome via your distro instructions or official package" >&2
+      ;;
+    *)
+      echo "[chrome] Please install Google Chrome manually" >&2
+      ;;
+  esac
+}
+
+install_brave() {
+  if command -v brave-browser >/dev/null 2>&1; then
+    echo "[brave] Already installed"
+    return 0
+  fi
+
+  local pm
+  pm=$(detect_package_manager)
+
+  case "$pm" in
+    apt)
+      pkg_install "$pm" curl gnupg ca-certificates || true
+      sudo install -m 0755 -d /etc/apt/keyrings || true
+      curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg | \
+        sudo tee /etc/apt/keyrings/brave-browser-archive-keyring.gpg >/dev/null || true
+      echo "deb [signed-by=/etc/apt/keyrings/brave-browser-archive-keyring.gpg arch=$(dpkg --print-architecture)] https://brave-browser-apt-release.s3.brave.com/ stable main" | \
+        sudo tee /etc/apt/sources.list.d/brave-browser-release.list >/dev/null || true
+      sudo apt-get update -y || true
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y brave-browser || true
+      ;;
+    dnf|pacman)
+      echo "[brave] Please install Brave via your distro instructions or official repo" >&2
+      ;;
+    *)
+      echo "[brave] Please install Brave manually" >&2
+      ;;
+  esac
+}
+
+install_keepassxc() {
+  if command -v keepassxc >/dev/null 2>&1; then
+    echo "[keepassxc] Already installed"
+    return 0
+  fi
+
+  local pm
+  pm=$(detect_package_manager)
+
+  case "$pm" in
+    apt)
+      pkg_install "$pm" keepassxc || true
+      ;;
+    dnf)
+      pkg_install "$pm" keepassxc || true
+      ;;
+    pacman)
+      pkg_install "$pm" keepassxc || true
+      ;;
+    *)
+      echo "[keepassxc] Please install KeepassXC manually for your distro" >&2
+      ;;
+  esac
+}
+
+install_superproductivity() {
+  if command -v superproductivity >/dev/null 2>&1; then
+    echo "[superproductivity] Already installed"
+    return 0
+  fi
+
+  local pm
+  pm=$(detect_package_manager)
+
+  case "$pm" in
+    apt)
+      # On Ubuntu/Linux Mint prefer Flatpak from Flathub
+      if ! command -v flatpak >/dev/null 2>&1; then
+        echo "[superproductivity] flatpak not found. Installing flatpak..."
+        pkg_install "$pm" flatpak || true
+      fi
+
+      if command -v flatpak >/dev/null 2>&1; then
+        echo "[superproductivity] Ensuring Flathub remote is configured"
+        flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
+
+        echo "[superproductivity] Installing via Flatpak (Flathub)"
+        flatpak install -y flathub com.superproductivity.SuperProductivity || \
+          echo "[superproductivity] Failed to install via Flatpak" >&2
+      else
+        echo "[superproductivity] flatpak still not available, please install Super Productivity manually" >&2
+      fi
+      ;;
+    dnf)
+      pkg_install "$pm" superproductivity || true
+      ;;
+    pacman)
+      pkg_install "$pm" superproductivity || true
+      ;;
+    *)
+      echo "[superproductivity] Please install Super Productivity manually for your distro" >&2
+      ;;
+  esac
+}
+
+configure_keyboard_spanish_latam() {
+  if ! command -v gsettings >/dev/null 2>&1; then
+    echo "[keyboard] gsettings not available, skipping keyboard layout configuration" >&2
+    return 0
+  fi
+
+  # Best-effort: set US + Spanish (Latin America) layouts
+  if gsettings writable org.gnome.desktop.input-sources sources >/dev/null 2>&1; then
+    echo "[keyboard] Setting keyboard layouts to US + Spanish (Latin America)"
+    gsettings set org.gnome.desktop.input-sources sources "[(\"xkb\", \"us\"), (\"xkb\", \"latam\")]" || \
+      echo "[keyboard] Failed to set keyboard layouts via gsettings" >&2
+  else
+    echo "[keyboard] org.gnome.desktop.input-sources.sources not writable, skipping" >&2
+  fi
+}
+
+pin_browsers_to_panel() {
+  if ! command -v gsettings >/dev/null 2>&1; then
+    echo "[panel] gsettings not available, skipping browser pinning" >&2
+    return 0
+  fi
+
+  # This is Cinnamon-specific (Linux Mint). For other desktops it will just no-op / fail harmlessly.
+  if gsettings writable org.cinnamon favorite-apps >/dev/null 2>&1; then
+    echo "[panel] Setting Cinnamon favorite apps to main browsers (overwriting existing list)"
+
+    local favorites
+    favorites="['google-chrome.desktop', 'brave-browser.desktop', 'chromium.desktop', 'org.gnome.Epiphany.desktop']"
+
+    gsettings set org.cinnamon favorite-apps "$favorites" || \
+      echo "[panel] Failed to update Cinnamon favorite apps" >&2
+  else
+    echo "[panel] org.cinnamon.favorite-apps not writable; skipping panel pinning" >&2
+  fi
+}
+
 install_nvidia_drivers() {
   if command -v nvidia-smi >/dev/null 2>&1; then
     echo "[nvidia] Drivers already installed"
@@ -350,6 +556,14 @@ main() {
   install_docker
   install_vscode
   install_chromium
+  install_gnome_web
+  install_dropbox
+  install_chrome
+  install_brave
+  install_keepassxc
+  install_superproductivity
+  configure_keyboard_spanish_latam
+  pin_browsers_to_panel
   install_nvidia_drivers
   install_nvm_node
 
