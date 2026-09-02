@@ -51,8 +51,8 @@ configure_yakuake_autostart() {
   local desktop_file
   desktop_file="$autostart_dir/yakuake.desktop"
 
-  if [ ! -f "$desktop_file" ]; then
-    cat > "$desktop_file" <<EOF
+  # Always ensure autostart entry exists and is correct (force update)
+  cat > "$desktop_file" <<EOF
 [Desktop Entry]
 Type=Application
 Exec=yakuake
@@ -61,11 +61,9 @@ NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=Yakuake
 Comment=Start Yakuake at login
+X-GNOME-Autostart-Delay=0
 EOF
-    echo "[yakuake] Autostart entry created at $desktop_file"
-  else
-    echo "[yakuake] Autostart entry already exists at $desktop_file"
-  fi
+  echo "[yakuake] Autostart entry ensured at $desktop_file"
 
   # Configure Yakuake/Konsole profile to use Nerd Font + zsh for powerline icons
   local profile_dir="$HOME/.local/share/konsole"
@@ -79,7 +77,7 @@ EOF
     # But keep FiraCode Nerd as default per our install; use FiraCode Nerd Font Mono
     chosen_font="FiraCode Nerd Font Mono,12,-1,5,50,0,0,0,0,0"
   fi
-  # Create or update profile to ensure Command=zsh and Font=powerline
+  # Create or update profile to ensure Command=zsh and Font=powerline (force overwrite)
   cat > "$profile_file" <<EOF
 [Appearance]
 ColorScheme=GreenOnBlack
@@ -91,6 +89,19 @@ Name=Profile 1
 Parent=FALLBACK/
 EOF
   echo "[yakuake] Konsole profile configured at $profile_file with Font=$chosen_font and Command=/usr/bin/zsh"
+  # Refresh font cache to ensure Nerd Font is recognized
+  fc-cache -f >/dev/null 2>&1 || true
+  # Force Yakuake to reload config if running
+  if command -v qdbus >/dev/null 2>&1 && qdbus org.kde.yakuake /yakuake/window org.kde.yakuake.toggleWindowState >/dev/null 2>&1; then
+    echo "[yakuake] Triggered Yakuake reload"
+  fi
+  # Kill and let autostart handle next login, or restart now if DISPLAY available
+  if [ -n "${DISPLAY:-}" ] && pgrep -x yakuake >/dev/null 2>&1; then
+    echo "[yakuake] Restarting Yakuake to apply profile"
+    pkill yakuake 2>/dev/null || true
+    sleep 1
+    (nohup yakuake >/dev/null 2>&1 &)
+  fi
 
   # Ensure yakuakerc points to Profile 1
   local yakuakerc="$HOME/.config/yakuakerc"
@@ -651,25 +662,58 @@ configure_keyboard_spanish_latam() {
 
   # Best-effort: set Spanish (Latin America) as default + US, with Alt+Caps toggle
   # Latam first = default layout on login; Alt+Caps toggles between latam ↔ us
-  if gsettings writable org.gnome.desktop.input-sources sources >/dev/null 2>&1; then
-    echo "[keyboard] Setting keyboard layouts to Spanish (Latin America) default + US (Alt+Caps to switch)"
-    gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'latam'), ('xkb', 'us')]" || \
-      echo "[keyboard] Failed to set keyboard layouts via gsettings" >&2
-  else
-    echo "[keyboard] org.gnome.desktop.input-sources.sources not writable, skipping" >&2
+  # Handle BOTH schemas: GNOME and Cinnamon (Linux Mint uses Cinnamon)
+  for schema in org.gnome.desktop.input-sources org.cinnamon.desktop.input-sources; do
+    if gsettings writable "$schema" sources >/dev/null 2>&1; then
+      echo "[keyboard] Setting $schema sources to latam,us"
+      gsettings set "$schema" sources "[('xkb', 'latam'), ('xkb', 'us')]" || \
+        echo "[keyboard] Failed to set $schema sources via gsettings" >&2
+    else
+      echo "[keyboard] $schema sources not writable, skipping" >&2
+    fi
+
+    if gsettings writable "$schema" xkb-options >/dev/null 2>&1; then
+      echo "[keyboard] Setting $schema xkb-options to grp:alt_caps_toggle"
+      gsettings set "$schema" xkb-options "['grp:alt_caps_toggle']" || \
+        echo "[keyboard] Failed to set $schema xkb-options via gsettings" >&2
+    else
+      echo "[keyboard] $schema xkb-options not writable, skipping" >&2
+    fi
+  done
+
+  # Persist to dconf as well (handles both)
+  if command -v dconf >/dev/null 2>&1; then
+    for dconf_path in /org/gnome/desktop/input-sources/ /org/cinnamon/desktop/input-sources/; do
+      printf "[/]\nsources=[('xkb', 'latam'), ('xkb', 'us')]\nxkb-options=['grp:alt_caps_toggle']\n" | dconf load "$dconf_path" 2>/dev/null || true
+    done
   fi
 
-  if gsettings writable org.gnome.desktop.input-sources xkb-options >/dev/null 2>&1; then
-    echo "[keyboard] Setting Alt+Caps as layout switch toggle (grp:alt_caps_toggle)"
-    gsettings set org.gnome.desktop.input-sources xkb-options "['grp:alt_caps_toggle']" || \
-      echo "[keyboard] Failed to set xkb-options via gsettings" >&2
-  else
-    echo "[keyboard] org.gnome.desktop.input-sources.xkb-options not writable, skipping" >&2
+  # Apply immediately to current X session
+  if command -v setxkbmap >/dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
+    echo "[keyboard] Applying setxkbmap latam,us grp:alt_caps_toggle"
+    setxkbmap latam,us -option grp:alt_caps_toggle 2>/dev/null || \
+      echo "[keyboard] setxkbmap failed" >&2
+  fi
+
+  # System-wide persistence for login screen / TTY (requires sudo, best-effort)
+  if command -v localectl >/dev/null 2>&1; then
+    sudo localectl set-x11-keymap latam,us pc105 ",," grp:alt_caps_toggle 2>/dev/null || true
+  fi
+  if [ -f /etc/default/keyboard ]; then
+    if grep -q '^XKBLAYOUT=' /etc/default/keyboard 2>/dev/null; then
+      sudo sed -i 's/^XKBLAYOUT=.*/XKBLAYOUT="latam,us"/' /etc/default/keyboard 2>/dev/null || true
+    fi
+    if grep -q '^XKBOPTIONS=' /etc/default/keyboard 2>/dev/null; then
+      sudo sed -i 's/^XKBOPTIONS=.*/XKBOPTIONS="grp:alt_caps_toggle"/' /etc/default/keyboard 2>/dev/null || true
+    fi
   fi
 
   # Verify
-  echo "[keyboard] Current sources: $(gsettings get org.gnome.desktop.input-sources sources 2>&1)"
-  echo "[keyboard] Current xkb-options: $(gsettings get org.gnome.desktop.input-sources xkb-options 2>&1)"
+  echo "[keyboard] Current GNOME sources: $(gsettings get org.gnome.desktop.input-sources sources 2>&1)"
+  echo "[keyboard] Current GNOME xkb-options: $(gsettings get org.gnome.desktop.input-sources xkb-options 2>&1)"
+  echo "[keyboard] Current Cinnamon sources: $(gsettings get org.cinnamon.desktop.input-sources sources 2>&1)"
+  echo "[keyboard] Current Cinnamon xkb-options: $(gsettings get org.cinnamon.desktop.input-sources xkb-options 2>&1)"
+  echo "[keyboard] Current setxkbmap: $(setxkbmap -query 2>&1 | tr '\n' ' ')"
 }
 
 pin_browsers_to_panel() {
@@ -760,6 +804,43 @@ install_nvm_node() {
   echo "[nvm] Set default Node version to $node_version"
 }
 
+install_opencode() {
+  if command -v opencode >/dev/null 2>&1; then
+    echo "[opencode] Already installed ($(opencode --version 2>&1 | head -n1))"
+    # Ensure PATH is exported for current session
+    if [[ ":$PATH:" != *":$HOME/.opencode/bin:"* ]]; then
+      export PATH="$HOME/.opencode/bin:$PATH"
+    fi
+    return 0
+  fi
+
+  echo "[opencode] Installing OpenCode (https://opencode.ai)..."
+
+  # Ensure curl is available
+  if ! command -v curl >/dev/null 2>&1; then
+    local pm
+    pm=$(detect_package_manager)
+    pkg_install "$pm" curl || true
+  fi
+
+  # Use official installer with --no-modify-path since PATH is managed via dotfiles (shell/exports.sh + shell/zsh/.zshrc)
+  if curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path; then
+    echo "[opencode] Installed successfully"
+    # Ensure PATH for current session
+    export PATH="$HOME/.opencode/bin:$PATH"
+    if command -v opencode >/dev/null 2>&1; then
+      echo "[opencode] Version: $(opencode --version 2>&1 | head -n1)"
+    fi
+  else
+    echo "[opencode] Installation failed" >&2
+    return 1
+  fi
+
+  # Verify zsh integration - PATH already handled via shell/exports.sh and shell/zsh/.zshrc
+  # No additional zsh completion setup required; opencode is a standalone binary
+  echo "[opencode] Zsh support: PATH includes $HOME/.opencode/bin via dotfiles (exports.sh + .zshrc fallback)"
+}
+
 main() {
   echo "[restore] Starting Linux environment restoration..."
 
@@ -772,6 +853,7 @@ main() {
   install_oh_my_zsh
   install_powerline_fonts
   install_nvm_node
+  install_opencode
 
   # Dev tools & containers
   install_docker
@@ -799,9 +881,20 @@ main() {
   install_nvidia_drivers
 
   # Apply stored Linux defaults (keyboard layouts & shortcuts) if script exists
-  if [ -n "${DOTLY_PATH:-}" ] && [ -x "$DOTLY_PATH/scripts/linux/defaults" ]; then
-    "$DOTLY_PATH/scripts/linux/defaults" import || true
-  fi
+  # Try DOTLY_PATH first (standard dotly layout: DOTFILES_PATH/modules/dotly)
+  # Fallback to DOTFILES_PATH/../scripts/linux/defaults (when DOTFILES_PATH is dotfiles_template) or repo root
+  for defaults_candidate in \
+    "${DOTLY_PATH:-}/scripts/linux/defaults" \
+    "${DOTFILES_PATH:-}/../scripts/linux/defaults" \
+    "${DOTFILES_PATH:-}/scripts/linux/defaults" \
+    "$HOME/.dotfiles/modules/dotly/scripts/linux/defaults" \
+    "$HOME/Documents/dotly/scripts/linux/defaults"; do
+    if [ -n "$defaults_candidate" ] && [ -x "$defaults_candidate" ]; then
+      echo "[restore] Applying Linux defaults via $defaults_candidate"
+      "$defaults_candidate" import || true
+      break
+    fi
+  done
 
   echo "[restore] Done. Some changes (like docker group membership or drivers) may require a reboot or re-login."
 }

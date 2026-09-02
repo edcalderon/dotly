@@ -42,3 +42,10 @@ if [ -s "$NVM_DIR/bash_completion" ]; then
     # shellcheck source=/dev/null
     . "$NVM_DIR/bash_completion"
 fi
+
+# OpenCode - AI coding assistant (https://opencode.ai)
+# PATH is set via shell/exports.sh ($HOME/.opencode/bin), this ensures binary is available
+# If installed via official installer with --no-modify-path, no extra sourcing needed
+if [ -d "$HOME/.opencode/bin" ] && [[ ":$PATH:" != *":$HOME/.opencode/bin:"* ]]; then
+    export PATH="$HOME/.opencode/bin:$PATH"
+fi

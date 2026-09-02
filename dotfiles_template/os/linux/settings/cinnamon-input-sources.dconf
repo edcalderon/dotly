@@ -1,0 +1,3 @@
+[/]
+sources=[('xkb', 'latam'), ('xkb', 'us')]
+xkb-options=['grp:alt_caps_toggle']
