@@ -66,6 +66,46 @@ EOF
   else
     echo "[yakuake] Autostart entry already exists at $desktop_file"
   fi
+
+  # Configure Yakuake/Konsole profile to use Nerd Font + zsh for powerline icons
+  local profile_dir="$HOME/.local/share/konsole"
+  local profile_file="$profile_dir/Profile 1.profile"
+  mkdir -p "$profile_dir"
+  # Determine best powerline font available
+  local chosen_font="FiraCode Nerd Font Mono,12,-1,5,50,0,0,0,0,0"
+  if fc-list | grep -qi "MesloLGS Nerd Font"; then
+    # Prefer Meslo if available (commonly recommended for agnoster)
+    chosen_font="MesloLGS Nerd Font Mono,12,-1,5,50,0,0,0,0,0"
+    # But keep FiraCode Nerd as default per our install; use FiraCode Nerd Font Mono
+    chosen_font="FiraCode Nerd Font Mono,12,-1,5,50,0,0,0,0,0"
+  fi
+  # Create or update profile to ensure Command=zsh and Font=powerline
+  cat > "$profile_file" <<EOF
+[Appearance]
+ColorScheme=GreenOnBlack
+Font=$chosen_font
+
+[General]
+Command=/usr/bin/zsh
+Name=Profile 1
+Parent=FALLBACK/
+EOF
+  echo "[yakuake] Konsole profile configured at $profile_file with Font=$chosen_font and Command=/usr/bin/zsh"
+
+  # Ensure yakuakerc points to Profile 1
+  local yakuakerc="$HOME/.config/yakuakerc"
+  if [ ! -f "$yakuakerc" ]; then
+    touch "$yakuakerc"
+  fi
+  if grep -q "^\[Desktop Entry\]" "$yakuakerc"; then
+    if grep -q "DefaultProfile" "$yakuakerc"; then
+      sed -i 's/^DefaultProfile=.*/DefaultProfile=Profile 1.profile/' "$yakuakerc"
+    else
+      sed -i '/^\[Desktop Entry\]/a DefaultProfile=Profile 1.profile' "$yakuakerc"
+    fi
+  else
+    echo -e "[Desktop Entry]\nDefaultProfile=Profile 1.profile" >> "$yakuakerc"
+  fi
 }
 
 install_st() {
@@ -157,26 +197,76 @@ install_oh_my_zsh() {
   echo "[oh-my-zsh] Installed (won't auto-change shell or run zsh)"
 }
 
+install_zsh() {
+  if command -v zsh >/dev/null 2>&1; then
+    echo "[zsh] Already installed ($(command -v zsh))"
+    return 0
+  fi
+
+  local pm
+  pm=$(detect_package_manager)
+
+  case "$pm" in
+    apt)
+      pkg_install "$pm" zsh
+      ;;
+    dnf)
+      pkg_install "$pm" zsh
+      ;;
+    pacman)
+      pkg_install "$pm" zsh
+      ;;
+    *)
+      echo "[zsh] Please install zsh manually for your distro" >&2
+      return 1
+      ;;
+  esac
+
+  echo "[zsh] Installed"
+}
+
 install_powerline_fonts() {
   local pm
   pm=$(detect_package_manager)
 
   case "$pm" in
     apt)
-      pkg_install "$pm" fonts-powerline fonts-firacode || true
+      pkg_install "$pm" fonts-powerline fonts-firacode powerline python3-pip || true
       ;;
     dnf)
-      pkg_install "$pm" powerline-fonts || true
+      pkg_install "$pm" powerline powerline-fonts python3-pip || true
       ;;
     pacman)
-      pkg_install "$pm" powerline ttf-dejavu ttf-liberation || true
+      pkg_install "$pm" powerline powerline-fonts ttf-dejavu ttf-liberation ttf-fira-code python-pip || true
       ;;
     *)
       echo "[fonts] Please install a Powerline / Nerd Font manually for your terminal" >&2
       ;;
   esac
 
-  echo "[fonts] Installed powerline-compatible fonts (select them in your terminal/yakuake profile)."
+  echo "[fonts] Installed powerline / powerline-compatible fonts (select them in your terminal/yakuake profile)."
+
+  # Install Nerd Fonts (FiraCode + Meslo) for proper powerline glyphs in Yakuake/Konsole
+  local fonts_dir="$HOME/.local/share/fonts"
+  mkdir -p "$fonts_dir"
+
+  if ! fc-list | grep -qi "FiraCode Nerd Font"; then
+    echo "[fonts] Installing FiraCode Nerd Font for powerline icons..."
+    local tmpzip="/tmp/FiraCodeNerd.zip"
+    if command -v curl >/dev/null 2>&1; then
+      curl -fSL -o "$tmpzip" https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/FiraCode.zip 2>&1 | tail -n 3 || true
+      if [ -f "$tmpzip" ]; then
+        mkdir -p "$fonts_dir/FiraCodeNerd"
+        unzip -o "$tmpzip" -d "$fonts_dir/FiraCodeNerd" >/dev/null 2>&1 || true
+        fc-cache -f >/dev/null 2>&1 || true
+        echo "[fonts] FiraCode Nerd Font installed"
+      fi
+    else
+      echo "[fonts] curl not found, skipping Nerd Font download" >&2
+    fi
+  else
+    echo "[fonts] FiraCode Nerd Font already installed"
+  fi
 }
 
 install_docker() {
@@ -245,6 +335,117 @@ install_vscode() {
       echo "[vscode] Please install VS Code manually for your distro" >&2
       ;;
   esac
+}
+
+install_vscodium() {
+  if command -v codium >/dev/null 2>&1 || command -v vscodium >/dev/null 2>&1; then
+    echo "[vscodium] Already installed"
+    return 0
+  fi
+
+  local pm
+  pm=$(detect_package_manager)
+
+  case "$pm" in
+    apt)
+      pkg_install "$pm" wget gpg apt-transport-https || true
+      # Import VSCodium GPG key and repo (Debian/Ubuntu/Mint)
+      wget -qO - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg | gpg --dearmor | sudo dd of=/usr/share/keyrings/vscodium-archive-keyring.gpg status=none || true
+      echo 'deb [ signed-by=/usr/share/keyrings/vscodium-archive-keyring.gpg ] https://download.vscodium.com/debs vscodium main' | \
+        sudo tee /etc/apt/sources.list.d/vscodium.list >/dev/null || true
+      sudo apt-get update -y || true
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y codium || true
+      ;;
+    dnf)
+      pkg_install "$pm" wget gnupg || true
+      sudo rpmkeys --import https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg || true
+      printf "[gitlab.com_paulcarroty_vscodium_repo]\nname=download.vscodium.com\nbaseurl=https://download.vscodium.com/rpms/\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg\nmetadata_expire=1h\n" | sudo tee /etc/yum.repos.d/vscodium.repo >/dev/null || true
+      sudo dnf check-update || true
+      sudo dnf install -y codium || true
+      ;;
+    pacman)
+      # Arch: try community/AUR package
+      if command -v yay >/dev/null 2>&1; then
+        yay -S --noconfirm vscodium-bin || yay -S --noconfirm vscodium || true
+      elif command -v paru >/dev/null 2>&1; then
+        paru -S --noconfirm vscodium-bin || paru -S --noconfirm vscodium || true
+      else
+        pkg_install "$pm" vscodium || echo "[vscodium] On Arch install manually: yay -S vscodium-bin" >&2 || true
+      fi
+      ;;
+    *)
+      echo "[vscodium] Please install VSCodium manually for your distro (https://vscodium.com/#install)" >&2
+      ;;
+  esac
+
+  if command -v codium >/dev/null 2>&1; then
+    echo "[vscodium] Installed successfully"
+  else
+    echo "[vscodium] Installation may have failed, please check manually" >&2
+  fi
+}
+
+configure_vscodium_default() {
+  local codium_bin=""
+
+  if command -v codium >/dev/null 2>&1; then
+    codium_bin="$(command -v codium)"
+  elif command -v vscodium >/dev/null 2>&1; then
+    codium_bin="$(command -v vscodium)"
+  else
+    echo "[vscodium-default] codium not found, skipping default IDE configuration" >&2
+    return 0
+  fi
+
+  echo "[vscodium-default] Configuring VSCodium ($codium_bin) as default IDE"
+
+  # update-alternatives for editor (Debian/Ubuntu)
+  if command -v update-alternatives >/dev/null 2>&1; then
+    sudo update-alternatives --install /usr/bin/editor editor "$codium_bin" 100 || true
+    sudo update-alternatives --install /usr/bin/visual visual "$codium_bin" 100 || true
+    # Try to set as default without prompting
+    echo "2" | sudo update-alternatives --config editor >/dev/null 2>&1 || sudo update-alternatives --set editor "$codium_bin" >/dev/null 2>&1 || true
+    echo "2" | sudo update-alternatives --config visual >/dev/null 2>&1 || sudo update-alternatives --set visual "$codium_bin" >/dev/null 2>&1 || true
+  fi
+
+  # xdg-mime defaults for common code/text types
+  if command -v xdg-mime >/dev/null 2>&1; then
+    local desktop_file="codium.desktop"
+    # Some installs use vscodium.desktop
+    if [ ! -f "/usr/share/applications/$desktop_file" ] && [ -f "/usr/share/applications/vscodium.desktop" ]; then
+      desktop_file="vscodium.desktop"
+    fi
+    if [ -f "/usr/share/applications/$desktop_file" ] || [ -f "$HOME/.local/share/applications/$desktop_file" ]; then
+      for mimetype in text/plain text/x-python text/x-shellscript application/javascript application/json text/html text/css text/markdown application/x-shellscript; do
+        xdg-mime default "$desktop_file" "$mimetype" >/dev/null 2>&1 || true
+      done
+      # Also set default for directories opened as projects (optional)
+      echo "[vscodium-default] xdg-mime defaults set to $desktop_file"
+    else
+      echo "[vscodium-default] Desktop file $desktop_file not found, skipping mime defaults" >&2
+    fi
+  fi
+
+  # Set EDITOR/VISUAL in shell profile if not already set to codium
+  local shell_rc="$HOME/.zshrc"
+  if [ -f "$shell_rc" ]; then
+    if ! grep -q 'EDITOR.*codium' "$shell_rc"; then
+      echo "[vscodium-default] You may want to add to ~/.zshrc: export EDITOR=\"codium --wait\" and VISUAL=\"codium --wait\""
+    fi
+  fi
+
+  # Set git editor if git is available and no editor set
+  if command -v git >/dev/null 2>&1; then
+    git config --global core.editor "codium --wait" 2>/dev/null || true
+    echo "[vscodium-default] Set git core.editor to 'codium --wait'"
+  fi
+
+  # Prefer codium when both code and codium exist: create/update symlink or alias hint
+  if command -v code >/dev/null 2>&1 && command -v codium >/dev/null 2>&1; then
+    echo "[vscodium-default] Both VS Code (code) and VSCodium (codium) installed; VSCodium is now the default IDE (editor/visual + mime + git)"
+  fi
+
+  echo "[vscodium-default] Done"
 }
 
 install_chromium() {
@@ -448,14 +649,27 @@ configure_keyboard_spanish_latam() {
     return 0
   fi
 
-  # Best-effort: set US + Spanish (Latin America) layouts
+  # Best-effort: set Spanish (Latin America) as default + US, with Alt+Caps toggle
+  # Latam first = default layout on login; Alt+Caps toggles between latam ↔ us
   if gsettings writable org.gnome.desktop.input-sources sources >/dev/null 2>&1; then
-    echo "[keyboard] Setting keyboard layouts to US + Spanish (Latin America)"
-    gsettings set org.gnome.desktop.input-sources sources "[(\"xkb\", \"us\"), (\"xkb\", \"latam\")]" || \
+    echo "[keyboard] Setting keyboard layouts to Spanish (Latin America) default + US (Alt+Caps to switch)"
+    gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'latam'), ('xkb', 'us')]" || \
       echo "[keyboard] Failed to set keyboard layouts via gsettings" >&2
   else
     echo "[keyboard] org.gnome.desktop.input-sources.sources not writable, skipping" >&2
   fi
+
+  if gsettings writable org.gnome.desktop.input-sources xkb-options >/dev/null 2>&1; then
+    echo "[keyboard] Setting Alt+Caps as layout switch toggle (grp:alt_caps_toggle)"
+    gsettings set org.gnome.desktop.input-sources xkb-options "['grp:alt_caps_toggle']" || \
+      echo "[keyboard] Failed to set xkb-options via gsettings" >&2
+  else
+    echo "[keyboard] org.gnome.desktop.input-sources.xkb-options not writable, skipping" >&2
+  fi
+
+  # Verify
+  echo "[keyboard] Current sources: $(gsettings get org.gnome.desktop.input-sources sources 2>&1)"
+  echo "[keyboard] Current xkb-options: $(gsettings get org.gnome.desktop.input-sources xkb-options 2>&1)"
 }
 
 pin_browsers_to_panel() {
@@ -531,7 +745,7 @@ install_nvm_node() {
   fi
 
   local node_version
-  node_version="22.18.0"
+  node_version="22.22.2"
 
   if nvm ls "$node_version" >/dev/null 2>&1; then
     echo "[nvm] Node $node_version already installed"
@@ -553,24 +767,36 @@ main() {
   pm=$(detect_package_manager)
   echo "[restore] Detected package manager: $pm"
 
+  # Core shell & tooling
+  install_zsh
+  install_oh_my_zsh
+  install_powerline_fonts
+  install_nvm_node
+
+  # Dev tools & containers
+  install_docker
+  install_vscode
+  install_vscodium
+  configure_vscodium_default
+
+  # Terminals & browsers
   install_yakuake
   configure_yakuake_autostart
   install_st
-  install_oh_my_zsh
-  install_powerline_fonts
-  install_docker
-  install_vscode
   install_chromium
   install_gnome_web
-  install_dropbox
   install_chrome
   install_brave
+
+  # Productivity
+  install_dropbox
   install_keepassxc
   install_superproductivity
+
+  # System
   configure_keyboard_spanish_latam
   pin_browsers_to_panel
   install_nvidia_drivers
-  install_nvm_node
 
   # Apply stored Linux defaults (keyboard layouts & shortcuts) if script exists
   if [ -n "${DOTLY_PATH:-}" ] && [ -x "$DOTLY_PATH/scripts/linux/defaults" ]; then

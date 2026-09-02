@@ -16,9 +16,9 @@ on other Debian/Ubuntu systems too.
   - Powerline‑compatible fonts (Fira Code, powerline)
   - Yakuake as primary terminal (auto‑started)
 - **Sets up my dev environment**
-  - `nvm` with default Node.js `22.18.0`
+  - `nvm` with default Node.js `22.22.2`
   - Docker (via distro package on apt‑based systems)
-  - VS Code
+  - VS Code + VSCodium (VSCodium as default IDE)
   - Chromium
   - NVIDIA drivers (best‑effort, Ubuntu/Mint focused)
 
@@ -61,7 +61,8 @@ Mint):
 - **Developer tools**
   - Docker (`docker.io` on apt‑based systems)
   - Visual Studio Code
-  - `nvm` + Node.js `22.18.0` (set as default)
+  - VSCodium (installed as default IDE — `editor`/`visual` + `xdg-mime` + `git core.editor`)
+  - `nvm` + Node.js `22.22.2` (set as default)
 
 - **System & drivers**
   - NVIDIA GPU drivers (Ubuntu/Mint best‑effort via
@@ -118,10 +119,10 @@ installed apps are usually detected and skipped.
 
 5. **Run the default Linux restoration script**
 
-   This will install and configure Yakuake, Oh My Zsh
-   (`agnoster`), fonts, Docker, VS Code, Chromium,
-   NVIDIA drivers (where possible) and NVM + Node
-   `22.18.0`.
+    This will install and configure Zsh + Oh My Zsh
+    (`agnoster`), Powerline fonts/tools, NVM + Node
+    `22.22.2`, Docker, VS Code, VSCodium (as default IDE),
+    Yakuake, Chromium, NVIDIA drivers (where possible).
 
    ```bash
    cd "$DOTFILES_PATH"
