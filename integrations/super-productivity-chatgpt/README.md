@@ -36,11 +36,22 @@ For a different Node installation, set `SP_BRIDGE_NODE` to an absolute Node 24+ 
    ```
 
    Enter the tunnel ID and key at the prompts. The key is saved in a private local file. The wizard uses `tunnel-client runtimes connect` for managed supervision, then prints runtime status. A running process alone is not sufficient: check `healthy` and `ready`.
-5. In ChatGPT, enable Developer mode (currently Settings → Security and login; availability depends on your account/workspace). Open plugin/connection settings, add a connection, choose **Tunnel**, and select the tunnel ID. Review the eight discovered tools.
+5. In ChatGPT, enable Developer mode (Settings → Security and login; availability depends on your account/workspace). Go to **Plugins → +** to open **New Plugin**. Set the name to `super-productivity` and the description to “Read and update my Super Productivity tasks and shared project briefs.” Under **Connection**, switch from **Server URL** to **Tunnel**, then select your tunnel or enter its ID. Do not enter a localhost URL or paste the runtime key into this form. Review the acknowledgment and create the connection. Review the eight discovered tools in the plugin settings.
 6. Attach the connection to a chat inside your ChatGPT Project. Add the contents of [CHATGPT_PROJECT_INSTRUCTIONS.md](CHATGPT_PROJECT_INSTRUCTIONS.md) to its instructions.
-7. Ask: “List my Super Productivity projects, then show the current brief for HASHPASS.” Next, request one clearly identified task update and confirm its result in the desktop app.
+7. In a new chat with the connection enabled, ask: “Use the super-productivity plugin to call list_projects and show my current projects. Do not change anything.” Confirm a tool call and the expected project IDs. Then read a project brief. Any subsequent write test should be a separately requested, clearly identified task update verified in the desktop app.
 
 The local bridge can be fully tested before step 2. A tunnel ID, runtime key, and the final ChatGPT connection are account-owned steps; local installation alone does not connect a ChatGPT account.
+
+## Verified browser setup and troubleshooting
+
+On 2026-09-06, the user successfully created the tunnel connection in the ChatGPT browser. Plugin settings displayed the discovered `create_task` action, and a new conversation successfully called `list_projects`, returning the five expected user projects plus Inbox with exact IDs. This verifies a browser-to-tunnel-to-desktop read, not just a running local process. The browser test made no changes.
+
+An earlier weekly-review attempt failed because the MCP connection was not exposed to that chat. No schedule or brief updates were created by that failed attempt. Creating the ChatGPT plugin connection and using it in a new chat resolved the live-read failure.
+
+- **Tunnel ready, but ChatGPT cannot find tools:** verify the plugin was created in the same ChatGPT workspace, enable it in the conversation, and retry in a new chat. A Platform tunnel alone does not install the ChatGPT plugin.
+- **Connection exists but tool metadata is stale:** open its plugin settings, refresh the connection, and retry in a new chat.
+- **Tunnel option unavailable:** inspect the information tooltip and check Developer mode/account/workspace availability before changing the local server.
+- **Weekly automation:** after the live-read test, paste [WEEKLY_REVIEW_PROMPT.md](WEEKLY_REVIEW_PROMPT.md) in that working chat. Check the **Scheduled** sidebar for the confirmed task. Schedule creation and an unattended run remain unverified in this setup record.
 
 ## Tools
 

@@ -90,9 +90,11 @@ systemctl --user status super-productivity-briefs.timer
 ~/.local/bin/tunnel-client runtimes status super-productivity --json
 ```
 
-Require `healthy` and `ready`, then test `list_projects` from the actual ChatGPT browser conversation. Local MCP tests and tunnel readiness have passed; a browser tool call must be verified in the destination account. The computer, app and tunnel must be running at scheduled review time.
+Require `healthy` and `ready`, then test `list_projects` from the actual ChatGPT browser conversation. **Browser verification passed on 2026-09-06:** the installed `super-productivity` connection invoked the tool and returned Inbox, HASHPASS, HACKATHONS, TESIS, LSTS and JACK-K with their exact IDs. No data was changed during that browser test. Local MCP tests and tunnel readiness also passed. Repeat the browser check in each destination account. The computer, app and tunnel must be running at scheduled review time.
 
 ## Weekly ChatGPT review
+
+Status: live reads from the ChatGPT browser are verified. Creation of the weekly schedule and a successful unattended run have not yet been evidenced; do not infer scheduling success from the connection test.
 
 Paste [WEEKLY_REVIEW_PROMPT.md](integrations/super-productivity-chatgpt/WEEKLY_REVIEW_PROMPT.md) into a ChatGPT conversation with the tunnel connection attached. Suggested schedule: Monday 09:00 America/Bogota. The local summary timer is not a ChatGPT scheduled task. Scheduling is complete only when ChatGPT confirms it and the task is visible in its scheduled-task settings.
 
