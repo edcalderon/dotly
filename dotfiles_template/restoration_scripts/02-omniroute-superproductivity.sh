@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # 02-omniroute-superproductivity.sh — Reproducible OmniRoute + Super Productivity + MCP
-# Idempotent, safe to re-run. Part of dotly: Documents/dotly
+# Legacy file-bridge installer. For the current ChatGPT setup see REPRODUCIBLE_SETUP.md.
+# Use --omniroute-only to provision only the pinned gateway.
 # Usage: DOTFILES_PATH="$PWD/dotfiles_template" bash dotfiles_template/restoration_scripts/02-omniroute-superproductivity.sh
 
 if [ -n "${DOTFILES_PATH:-}" ] && [ -f "$DOTFILES_PATH/os/linux/.dotly" ]; then
@@ -37,10 +38,10 @@ install_omniroute() {
   ensure_node
   if ! command -v omniroute >/dev/null 2>&1; then
     echo "[omniroute] Installing npm -g omniroute..."
-    npm install -g omniroute@latest || npm install -g omniroute@3.8.49
+    npm install -g omniroute@3.8.50
   else
     echo "[omniroute] Already installed: $(omniroute --version 2>&1 | head -n1) — ensuring latest"
-    npm install -g omniroute@latest 2>/dev/null || true
+    npm install -g omniroute@3.8.50
   fi
 
   mkdir -p "$OMNI_DATA_DIR" "$OMNI_DATA_DIR/logs" "$HOME/.config/systemd/user"
@@ -79,7 +80,7 @@ EOF
 
   cat > "$HOME/.config/systemd/user/omniroute.service" <<EOF
 [Unit]
-Description=OmniRoute AI gateway (v3.8.51)
+Description=OmniRoute AI gateway
 Documentation=https://omniroute.online
 After=network-online.target
 [Service]
@@ -104,9 +105,9 @@ EOF
   systemctl --user enable omniroute 2>/dev/null || true
   systemctl --user restart omniroute || systemctl --user start omniroute
 
-  echo "[omniroute] Waiting for http://localhost:$OMNI_PORT/v1/models..."
+  echo "[omniroute] Waiting for http://localhost:$OMNI_PORT/..."
   for i in $(seq 1 20); do
-    if curl -sf "http://localhost:$OMNI_PORT/v1/models" >/dev/null 2>&1; then
+    if curl -sf "http://localhost:$OMNI_PORT/" >/dev/null 2>&1; then
       echo "[omniroute] UP on $OMNI_PORT"
       break
     fi
@@ -140,7 +141,7 @@ install_superproductivity_native() {
   local pm
   pm=$(detect_package_manager 2>/dev/null || echo apt)
   local deb_url
-  deb_url=$(curl -sf https://api.github.com/repos/johannesjo/super-productivity/releases/latest 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); urls=[a['browser_download_url'] for a in d.get('assets',[]) if a['name'].endswith('_amd64.deb')]; print(urls[0] if urls else '')" 2>/dev/null || echo "")
+  deb_url=$(curl -sf https://api.github.com/repos/johannesjo/super-productivity/releases/latest 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); urls=[a['browser_download_url'] for a in d.get('assets',[]) if a['name'].endswith('-amd64.deb')]; print(urls[0] if urls else '')" 2>/dev/null || echo "")
   if [ -n "$deb_url" ] && [ "$pm" = "apt" ]; then
     echo "[superproductivity] Installing native .deb from $deb_url"
     wget -O /tmp/super-productivity.deb "$deb_url"
@@ -149,7 +150,7 @@ install_superproductivity_native() {
   elif command -v flatpak >/dev/null 2>&1; then
     echo "[superproductivity] .deb not available, installing Flatpak fallback"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
-    flatpak install -y flathub com.superproductivity.SuperProductivity || true
+    flatpak install -y flathub com.super_productivity.SuperProductivity || true
   else
     echo "[superproductivity] Manual install required" >&2
   fi
@@ -189,12 +190,12 @@ else:
 PY
 
   # Flatpak workaround si aplica
-  if flatpak list 2>/dev/null | grep -q com.superproductivity.SuperProductivity; then
+  if flatpak list 2>/dev/null | grep -q com.super_productivity.SuperProductivity; then
     echo "[sp-mcp] Flatpak detected — applying symlink workaround"
-    mkdir -p "$HOME/.var/app/com.superproductivity.SuperProductivity/data"
-    rm -f "$HOME/.var/app/com.superproductivity.SuperProductivity/data/super-productivity-mcp"
-    ln -sfn "$MCP_DIR" "$HOME/.var/app/com.superproductivity.SuperProductivity/data/super-productivity-mcp"
-    flatpak override --user --filesystem="$MCP_DIR:rw" com.superproductivity.SuperProductivity 2>/dev/null || true
+    mkdir -p "$HOME/.var/app/com.super_productivity.SuperProductivity/data"
+    rm -f "$HOME/.var/app/com.super_productivity.SuperProductivity/data/super-productivity-mcp"
+    ln -sfn "$MCP_DIR" "$HOME/.var/app/com.super_productivity.SuperProductivity/data/super-productivity-mcp"
+    flatpak override --user --filesystem="$MCP_DIR:rw" com.super_productivity.SuperProductivity 2>/dev/null || true
     echo "[sp-mcp] Symlink + override done"
   fi
 
@@ -206,6 +207,7 @@ PY
 main() {
   echo "[02] OmniRoute + Super Productivity + MCP — start"
   install_omniroute
+  if [ "${1:-}" = "--omniroute-only" ]; then return 0; fi
   install_superproductivity_native
   install_sp_mcp
   echo "[02] Done. Verify:"

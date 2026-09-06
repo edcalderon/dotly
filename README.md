@@ -1,5 +1,7 @@
 ## edcalderon dotfiles
 
+Current desktop AI/task setup: [OmniRoute, Super Productivity, Dropbox and ChatGPT reproduction guide](REPRODUCIBLE_SETUP.md), including migration steps and a weekly review prompt.
+
 Personal dotfiles and restore scripts, built on top of
 [`CodelyTV/dotly`](https://github.com/CodelyTV/dotly).
 
