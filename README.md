@@ -26,10 +26,15 @@ Personal dotfiles and restore scripts, built on top of
     ```
   - `~/.config/yakuakerc` `DefaultProfile=Profile 1.profile`
 - **Dev environment**
-  - `nvm` (`$HOME/.nvm`) with `Node 22.22.2` (`npm 10.9.7`) set as default (`nvm alias default 22.22.2`)
-  - `opencode 1.18.26` (`~/.opencode/bin/opencode`, `@opencode-ai/plugin 1.18.26`, `~/.config/opencode/opencode.jsonc`) – installed via `https://opencode.ai/install --no-modify-path`, PATH via dotfiles, verified `zsh -ic 'which opencode'`
+  - `nvm` (`$HOME/.nvm`) with `Node 22.22.2` (`npm 10.9.7`) set as default (`nvm alias default 22.22.2`); a second Node `24.14.1` is kept alongside it just to run the OmniRoute gateway
+  - `opencode 1.18.32` (`~/.opencode/bin/opencode`, `~/.config/opencode/opencode.json`) – installed via `https://opencode.ai/install --no-modify-path`, PATH via dotfiles, verified `zsh -ic 'which opencode'`
   - Docker `29.1.3 (0ubuntu3~24.04.2)` (`docker.io` on apt)
   - VS Code `1.136.0` + VSCodium `1.126.04524` (`/usr/bin/codium`) as default IDE (`editor`/`visual` via `update-alternatives`, `xdg-mime`, `git config --global core.editor "codium --wait"`)
+- **Local AI stack – OmniRoute gateway + Claude Code + OpenCode** *(2026-09-28)*
+  - `omniroute 3.8.50` (npm global, Node `24.14.1`) as a `systemd --user` service on `http://localhost:20128`, an OpenAI-compatible gateway that fronts Anthropic/OpenAI/Google/Z.AI plus the hosted **OpenCode Zen** and **OpenCode Go** model providers, and defines fallback "combo" models (e.g. `claude-with-free-fallback`, `go-with-claude-fallback`)
+  - **Claude Code** (`2.1.246`) points at it via `ANTHROPIC_BASE_URL=http://localhost:20128` + `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1` in `~/.claude/settings.json`; multiple named model "profiles" live under `~/.claude/profiles/<name>/settings.json`, run with `claude --settings ~/.claude/profiles/<name>/settings.json`
+  - **OpenCode** (`1.18.32`) talks to the same gateway through a local `@omniroute/opencode-plugin` (built from source, `github.com/diegosouzapw/OmniRoute`, not on npm) plus `opencode-antigravity-auth`, both declared in `~/.config/opencode/opencode.json`
+  - Full architecture, exact versions, manual dashboard steps (providers/combos are encrypted in OmniRoute's own sqlite store, not files) and troubleshooting: **[`REPRODUCIBLE_SETUP.md`](REPRODUCIBLE_SETUP.md)**, installed by `dotfiles_template/restoration_scripts/02-omniroute-superproductivity.sh` + `03-opencode-claude-ai-stack.sh`
 - **Browsers & productivity**
   - Chromium `152.0.7977.64`, Google Chrome `152.0.7977.75`, Brave `152.1.94.117`, GNOME Web (`epiphany-browser`)
   - Dropbox (`nautilus-dropbox`), KeepassXC, Super Productivity (Flatpak `com.superproductivity.SuperProductivity`)
@@ -46,6 +51,21 @@ Most logic lives in:
 - Stored defaults: `dotfiles_template/os/linux/settings/gnome-input-sources.dconf` + `cinnamon-input-sources.dconf` + `cinnamon-keybindings.dconf`
 
 ---
+
+## Changelog – 2026-09-28
+
+- **Local AI stack made reproducible: OmniRoute + Claude Code + OpenCode (Zen/Go)**
+  - New `dotfiles_template/restoration_scripts/03-opencode-claude-ai-stack.sh` — installs
+    OpenCode CLI, builds `@omniroute/opencode-plugin` from source (not on npm) and drops it
+    into `~/.config/opencode/plugins/omniroute`, wires `opencode.json` (plugins, default
+    model, MCP entries for tools already present) and `~/.claude/settings.json` (gateway
+    env vars), and writes example Claude Code "profiles" under `~/.claude/profiles/`
+  - `02-omniroute-superproductivity.sh` version/config refreshed to match the live install
+    (OmniRoute `3.8.50`, Node `24.14.1`)
+  - Full architecture diagram, exact live versions, the manual one-time dashboard steps
+    (connecting Anthropic/OpenAI/Google/Z.AI/**OpenCode Zen**/**OpenCode Go** and creating
+    fallback "combo" models — these live encrypted in OmniRoute's own sqlite store, not in
+    a file dotly can template) and troubleshooting: see `REPRODUCIBLE_SETUP.md`
 
 ## Changelog – 2026-09-02
 
@@ -153,9 +173,20 @@ Assumptions:
    cd "$HOME/.dotfiles"
    DOTFILES_PATH="$PWD/dotfiles_template" \
      bash dotfiles_template/restoration_scripts/01-default_linux_restoration.sh
-   # Installs: zsh + Oh My Zsh (agnoster), Nerd Fonts, nvm Node 22.22.2, opencode 1.18.26,
+   # Installs: zsh + Oh My Zsh (agnoster), Nerd Fonts, nvm Node 22.22.2, opencode,
    # docker, VS Code, VSCodium (default), yakuake, chromium/chrome/brave, keepassxc, etc.
    # Configures: keyboard latam,us (Cinnamon+GNOME), yakuake Profile 1 (zsh + FiraCode Nerd), panel favorites
+   ```
+5b. **(Optional) Restore the local AI stack — OmniRoute + Claude Code + OpenCode**
+   ```bash
+   DOTFILES_PATH="$PWD/dotfiles_template" \
+     bash dotfiles_template/restoration_scripts/02-omniroute-superproductivity.sh
+   DOTFILES_PATH="$PWD/dotfiles_template" \
+     bash dotfiles_template/restoration_scripts/03-opencode-claude-ai-stack.sh
+   # Starts the OmniRoute gateway (:20128) as a systemd --user service, builds the
+   # OpenCode<->OmniRoute plugin, and wires Claude Code + OpenCode to it.
+   # A few manual, one-time dashboard steps remain (connecting providers, creating
+   # fallback "combo" models) — see REPRODUCIBLE_SETUP.md §2.4.
    ```
 6. **Apply stored desktop defaults (if not already via restorer)**
    ```bash
@@ -180,7 +211,9 @@ After login, `yakuake` -> `zsh` + `agnoster` + Nerd Font, `opencode --version` w
 │  │  ├── linux/.dotly              # helpers
 │  │  └── linux/settings/           # gnome-input-sources.dconf, cinnamon-input-sources.dconf, cinnamon-keybindings.dconf
 │  ├── restoration_scripts/
-│  │  └── 01-default_linux_restoration.sh  # main Linux Mint baseline (zsh, opencode, keyboard, yakuake, etc.)
+│  │  ├── 01-default_linux_restoration.sh       # main Linux Mint baseline (zsh, opencode, keyboard, yakuake, etc.)
+│  │  ├── 02-omniroute-superproductivity.sh     # OmniRoute gateway (systemd) + Super Productivity + SP-MCP
+│  │  └── 03-opencode-claude-ai-stack.sh        # OpenCode<->OmniRoute plugin + Claude Code gateway + profiles
 │  ├── shell/
 │  │  ├── exports.sh                # PATH includes $HOME/.opencode/bin
 │  │  ├── zsh/.zshrc                # + opencode fallback, nvm, zim
