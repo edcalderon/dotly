@@ -1,46 +1,136 @@
-# Stack Reproducible: OmniRoute + Claude Code + OpenCode (Zen/Go) + Super Productivity
+# Reproduce the current desktop and ChatGPT setup
 
-> Documentación para reproducir el stack de IA local en cualquier PC Linux Mint / Ubuntu en < 15 min via dotly.
+Validated on Linux Mint, 2026-09-06. These are pinned, tested versions, not a claim that they are the newest upstream releases.
 
-## Resumen del Stack Actual (2026-09-28 — verificado en vivo en `ed`)
+| Component | Version / location |
+| --- | --- |
+| Node (nvm) | 24.14.1 |
+| OmniRoute | 3.8.50, user service `omniroute.service`, localhost:20128 |
+| Super Productivity | 18.21.2, native Debian package extracted under `~/.local/opt/superproductivity` |
+| Task sync | Super Productivity's own Dropbox connection |
+| ChatGPT bridge | [Source and instructions](integrations/super-productivity-chatgpt/README.md), authenticated local REST API on 127.0.0.1:3876 |
+| OpenAI tunnel client | 0.0.14, private managed stdio runtime named `super-productivity` |
+| Local summaries | User timer `super-productivity-briefs.timer`, every five minutes |
 
-| Componente | Versión | Instalación | Puerto / Path | Estado |
-|---|---|---|---|---|
-| **OmniRoute Gateway** | 3.8.50 (npm, Node 24.14.1 via nvm) | `npm -g omniroute@latest` → systemd user | `http://localhost:20128` (`/v1` OpenAI-compat) | ✅ `systemctl --user status omniroute` |
-| **Claude Code** | CLI `2.1.246` | native installer (`~/.local/share/claude/versions/…`) | `~/.claude/settings.json` → `ANTHROPIC_BASE_URL=http://localhost:20128` | ✅ Gateway discovery ON, model `claude-with-free-fallback` |
-| **Claude Code "profiles"** | — | `~/.claude/profiles/<name>/settings.json` | run with `claude --settings ~/.claude/profiles/<name>/settings.json` | ✅ 11 profiles (fallback chains + raw models) |
-| **OpenCode CLI** | 1.18.32 | `curl -fsSL https://opencode.ai/install \| bash` | `~/.config/opencode/opencode.json` | ✅ |
-| **@omniroute/opencode-plugin** | 0.2.1 (built from source, not on npm) | cloned+built from `diegosouzapw/OmniRoute` → `~/.config/opencode/plugins/omniroute` | registers `omniroute` as an OpenCode provider (`opencode-omniroute/...`) | ✅ |
-| **opencode-antigravity-auth** | 1.6.0 | npm plugin, auto-installed by OpenCode from `opencode.json` `plugin[]` | auth flow for the `antigravity` combo provider | ✅ |
-| **OpenCode Zen** | — | hosted model marketplace by the OpenCode team | connected as an upstream provider inside OmniRoute + directly in OpenCode auth (`opencode-zen/qwen3.6-plus`, etc.) | ✅ auth in `~/.local/share/opencode/auth.json` |
-| **OpenCode Go** | — | hosted model plan by the OpenCode team | connected as an upstream provider/combo (`go-with-claude-fallback`, …) | ✅ auth key `opencode-go` |
-| **Super Productivity** | 18.21.2 | Flatpak `com.superproductivity.SuperProductivity` (Flathub) | `~/.var/app/.../data` | ⚠️ File-bridge requiere symlink (ver abajo) — **recomendado migrar a .deb nativo** |
-| **SP-MCP Bridge** | organicmoron/SP-MCP | `~/.local/share/super-productivity-mcp/mcp_server.py` + plugin ZIP | `plugin_commands/` ↔ `plugin_responses/` | ✅ 10 tools, via `mcp==1.12.4` |
+The former Flatpak installation was removed after preserving its profile. The old SP-MCP file plugin is not required for this connection. OmniRoute is independent of the ChatGPT bridge. No model provider configuration is implied by installing OmniRoute.
 
-### Otros MCP servers activos (no gestionados por dotly, dependencias externas)
+## New Linux machine
 
-| MCP | Origen | Notas |
-|---|---|---|
-| `codebase-memory-mcp` | binario propio en `~/.local/bin/codebase-memory-mcp` | fuera de este repo; si no existe, se omite en `opencode.json`/`.mcp.json` |
-| `headroom` | `~/.headroom/venv` (compresión/cache de contexto) | fuera de este repo |
-| `pencil` | app de escritorio (AppImage montado en `/tmp/.mount_Pen-*`) | **no reproducible por script** — requiere reinstalar la app y que esté abierta; si el mount no existe, el MCP simplemente falla al conectar (no rompe nada más) |
-| `hostinger` | remoto (`https://mcp.hostinger.com`) | necesita `HOSTINGER_API_TOKEN` en el entorno |
-
-### Prueba end-to-end verificada
+Requires x86_64 Linux, a desktop session, user systemd, Python 3, curl, unzip, dpkg-deb and Node 24+. Install Node 24.14.1 through your existing nvm installation (`nvm install 24.14.1; nvm alias default 24.14.1`). If nvm is absent, follow its [official installation instructions](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```bash
-curl http://localhost:20128/v1/chat/completions -d '{"model":"auto/best-fast",
-  "messages":[{"role":"user","content":"Create task Buy milk"}],
-  "tools":[{"type":"function","function":{"name":"create_task","parameters":{"type":"object","properties":{"title":{"type":"string"}}}}}]}'
-# → glm-5.2 genera tool_calls: create_task ✓
-timeout 3 python3 -c "from mcp import ClientSession..." # list_tools → 10 tools ✓
-claude --settings ~/.claude/profiles/go-with-claude-fallback/settings.json -p "ping"
-opencode auth list   # google, openai, zai, anthropic, opencode-go, opencode-omniroute
+git clone https://github.com/edcalderon/dotly.git
+cd dotly
+bash integrations/super-productivity-chatgpt/install-desktop.sh
 ```
+
+This installs the pinned native app and checksum-verifies the pinned tunnel client. It does not remove another installation, import data, or launch sync. Launch Super Productivity from the application menu, then complete the following **before installing the bridge**:
+
+1. On the original machine, sync and export a complete Super Productivity backup. Check that expected projects and tasks exist. Keep this export privately outside Git.
+2. On the new machine, connect Dropbox inside Super Productivity. A linked Dropbox desktop client is neither required nor sufficient. Use the existing remote data; do not choose to overwrite it with an empty/new local database. If the UI cannot clearly restore remote data, stop and import the verified full export first, then resolve sync using that known complete copy.
+3. Confirm project names, task counts, completed tasks and archives, then restart the app and confirm Dropbox remains selected. A green connection indicator alone does not prove the remote contents are correct.
+4. Enable the local REST API under Settings → Misc. Keep the desktop app open. Its bearer token is generated locally; do not commit or paste it.
+
+```bash
+bash integrations/super-productivity-chatgpt/install.sh
+python3 ~/.local/lib/super-productivity-chatgpt/connect-tunnel.py
+```
+
+The wizard needs an account-owned tunnel ID and runtime key. See the [browser connection steps](integrations/super-productivity-chatgpt/README.md#connect-chatgpt-in-the-browser). No domain is needed. Account sign-in and attaching the connection in ChatGPT remain manual.
+
+## OmniRoute (optional, separate)
+
+With Node 24.14.1 active, `npm install -g omniroute@3.8.50` reproduces the installed package. For service and private environment-file provisioning using the repository helper:
+
+```bash
+bash dotfiles_template/restoration_scripts/02-omniroute-superproductivity.sh --omniroute-only
+```
+
+This preserves an existing `~/.omniroute/.env`; it must never regenerate an existing storage encryption key. The helper also updates existing Claude gateway settings. Configure providers in http://localhost:20128 separately. An authenticated API returning 401 is not proof that the service is down. Preserve the complete private `~/.omniroute` directory when migrating existing provider state and keys; never publish it.
+
+## Current project organization
+
+Active user projects: **HACKATHONS, TESIS, LSTS, HASHPASS, JACK-K**, plus Inbox. Hackthon tasks were moved into HACKATHONS; MAESTRIA mapped to TESIS and had no active tasks. Nineteen older projects were archived without marking their unfinished tasks complete. The verified post-migration Dropbox snapshot contained 55 task records, 25 total projects and 22 separately archived tasks. These counts are a migration baseline, not an invariant for future use.
+
+Project IDs and task IDs are the bindings; names alone are not durable identifiers. Resolve them with `list_projects` and keep each mapping in its shared brief. Actual IDs, task contents, account details and credentials are deliberately local. The existing private `project-bindings.json` records the initial mapping. This bridge cannot create/archive projects or discover new private ChatGPT Projects automatically.
+
+## Migration, backups and multiple machines
+
+Use one machine as the bridge host. Other Super Productivity clients can use normal Dropbox sync. Do not point competing bridge hosts with independent operation journals at the same task database: retry history and brief revisions are local. A new host needs its own REST token and a configured tunnel runtime; stop the old runtime before switching the ChatGPT connection.
+
+Back up Super Productivity with its full export. Preserve the old native/Flatpak profile until the new app and remote data are verified. In this migration, an earlier client had overwritten Dropbox with starter tasks; an older Dropbox revision recovered the full dataset. Retain useful Dropbox revision history and local exports before resolving conflicts.
+
+Shared briefs are **not** in Super Productivity's Dropbox snapshot. Back up the bridge database consistently with SQLite's backup API (ordinary copying of a live WAL database can omit recent changes):
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+import sqlite3, datetime
+root = Path.home()/'.local/share/super-productivity-chatgpt'
+out = Path.home()/'.local/state/dotly-backups'/datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+out.mkdir(parents=True, mode=0o700)
+src = sqlite3.connect(f'file:{root}/bridge.sqlite?mode=ro', uri=True)
+dst = sqlite3.connect(out/'bridge.sqlite')
+with dst: src.backup(dst)
+src.close(); dst.close()
+(out/'bridge.sqlite').chmod(0o600)
+print(out)
+PY
+```
+
+Copy that backup and optional private `project-bindings.json` securely to the new host. Stop its bridge runtime and summary timer before restoring `bridge.sqlite`; restore into a private directory with mode 0700 and the database with 0600, then restart. Never overwrite a live database. Summary JSON is derived and can be regenerated. Do not put runtime keys, OAuth tokens, app profiles, database files or task exports in this repository.
+
+## Startup and verification
+
+The installer enables the native app at desktop login and the five-minute summary timer. The tunnel uses OpenAI's managed runtime supervision; **reboot/login persistence has not been verified**. After login check readiness and reconnect with the wizard if necessary (an empty key input retains the existing private key):
+
+```bash
+systemctl --user status super-productivity-briefs.timer
+~/.nvm/versions/node/v24.14.1/bin/node ~/.local/lib/super-productivity-chatgpt/src/doctor.js
+~/.local/bin/tunnel-client runtimes status super-productivity --json
+```
+
+Require `healthy` and `ready`, then test `list_projects` from the actual ChatGPT browser conversation. **Browser verification passed on 2026-09-06:** the installed `super-productivity` connection invoked the tool and returned Inbox, HASHPASS, HACKATHONS, TESIS, LSTS and JACK-K with their exact IDs. No data was changed during that browser test. Local MCP tests and tunnel readiness also passed. Repeat the browser check in each destination account. The computer, app and tunnel must be running at scheduled review time.
+
+## Weekly ChatGPT review
+
+Status: live reads from the ChatGPT browser are verified. Creation of the weekly schedule and a successful unattended run have not yet been evidenced; do not infer scheduling success from the connection test.
+
+Paste [WEEKLY_REVIEW_PROMPT.md](integrations/super-productivity-chatgpt/WEEKLY_REVIEW_PROMPT.md) into a ChatGPT conversation with the tunnel connection attached. Suggested schedule: Monday 09:00 America/Bogota. The local summary timer is not a ChatGPT scheduled task. Scheduling is complete only when ChatGPT confirms it and the task is visible in its scheduled-task settings.
+
+The integration supports live task reads and authorized task writes in both directions through one Super Productivity database. It does not replicate ChatGPT chat histories, uploaded files, or private Project membership. New ChatGPT projects must be supplied and mapped explicitly.
 
 ---
 
-## 1. Arquitectura del stack de IA
+# OmniRoute for Claude Code and OpenCode (AI coding agents)
+
+Separate from the ChatGPT bridge above — this section reproduces the OmniRoute gateway
+being used to route the **Claude Code** and **OpenCode** CLIs through pinned upstream
+providers, including the hosted **OpenCode Zen** and **OpenCode Go** model offerings.
+Same OmniRoute install as above; this is an independent set of consumers on top of it.
+
+Live on this machine as of 2026-09-28, checked against the running config, not a claim
+that it is the newest upstream state:
+
+| Component | Version / location | Notes |
+| --- | --- | --- |
+| OmniRoute Gateway | 3.8.50, `systemctl --user status omniroute` on `localhost:20128` | same service as the ChatGPT bridge section; `/v1` is OpenAI-compatible |
+| Claude Code | CLI `2.1.246` | `~/.claude/settings.json` → `ANTHROPIC_BASE_URL=http://localhost:20128`, `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1` |
+| Claude Code "profiles" | `~/.claude/profiles/<name>/settings.json` | run with `claude --settings ~/.claude/profiles/<name>/settings.json`; each just overrides the model, still routes through OmniRoute |
+| OpenCode CLI | 1.18.32 | `~/.config/opencode/opencode.json` |
+| `@omniroute/opencode-plugin` | 0.2.1, built from source (not published to npm) | source: `github.com/diegosouzapw/OmniRoute`, subdir `@omniroute/opencode-plugin`; built copy lives at `~/.config/opencode/plugins/omniroute` |
+| `opencode-antigravity-auth` | 1.6.0 | npm plugin, auto-installed by OpenCode from the `plugin[]` array in `opencode.json` |
+| OpenCode Zen | hosted model marketplace, OpenCode team | connected as an upstream provider; used directly as `opencode-zen/qwen3.6-plus` and inside OmniRoute combos |
+| OpenCode Go | hosted plan, OpenCode team | connected as an upstream provider; feeds the `go-with-claude-fallback` combo |
+
+External MCP servers also present on this machine but **not installed or managed by
+dotly** (listed so a fresh machine doesn't chase phantom config): `codebase-memory-mcp`
+(private binary at `~/.local/bin/codebase-memory-mcp`), `headroom`
+(`~/.headroom/venv`), `pencil` (a desktop app's AppImage mount — its MCP entry simply
+fails to connect if the app isn't running, harmlessly), `hostinger` (remote MCP, needs
+`HOSTINGER_API_TOKEN`). Skip these on a new machine unless you specifically use them.
+
+## Architecture
 
 ```
                      ┌─────────────────────────┐
@@ -62,237 +152,97 @@ opencode auth list   # google, openai, zai, anthropic, opencode-go, opencode-omn
                                                          + opencode-antigravity-auth)
 ```
 
-- **OmniRoute** is the single local gateway both CLIs talk to. It owns the upstream
-  provider credentials and defines "combo" models (ordered fallback chains, e.g. try
-  Claude first, fall back to a free/cheap model on rate-limit).
-- **OpenCode Zen** and **OpenCode Go** are hosted model offerings from the OpenCode team
-  (not part of this repo) — Zen is a pay-as-you-go model marketplace, Go is a bundled
-  plan. Both are added as upstream providers so OmniRoute (and OpenCode directly) can
-  route to them, including inside fallback combos like `go-with-claude-fallback`.
-- **Claude Code** talks OpenAI/Anthropic wire format straight to OmniRoute via
-  `ANTHROPIC_BASE_URL`; `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1` lets it list
-  OmniRoute's dynamic model catalog.
-- **OpenCode** talks to OmniRoute through `@omniroute/opencode-plugin`, a local plugin
-  (not published to npm as of `0.2.1`) that registers `omniroute` as a provider and
-  handles the `/connect` auth flow + multi-instance support.
+OmniRoute owns the upstream provider credentials (encrypted in `storage.sqlite`) and
+defines "combo" models — ordered fallback chains, e.g. try Claude first, fall back to a
+free/cheap model on rate-limit. OpenCode Zen and OpenCode Go are not part of this repo;
+they're hosted offerings from the OpenCode team, added here as two more upstream
+providers OmniRoute (and OpenCode directly) can route to.
 
----
-
-## 2. Instalación Reproducible (dotly)
-
-### 2.1 One-liner dotly (PC nuevo, Linux Mint)
+## New machine setup
 
 ```bash
-sudo apt update && sudo apt install -y git
-git clone https://github.com/edcalderon/dotly "$HOME/.dotfiles"
-cd "$HOME/.dotfiles"
-git submodule update --init --recursive modules/dotly
-DOTFILES_PATH="$HOME/.dotfiles" DOTLY_PATH="$DOTFILES_PATH/modules/dotly" "$DOTLY_PATH/bin/dot" self install
+# 1. Base OmniRoute service (see "OmniRoute (optional, separate)" above)
+bash dotfiles_template/restoration_scripts/02-omniroute-superproductivity.sh --omniroute-only
 
-# Restaura entorno base (zsh, Node, Docker, VSCodium, Yakuake, teclado, navegadores...)
-DOTFILES_PATH="$PWD/dotfiles_template" bash dotfiles_template/restoration_scripts/01-default_linux_restoration.sh
-# OmniRoute gateway + Super Productivity + SP-MCP
-DOTFILES_PATH="$PWD/dotfiles_template" bash dotfiles_template/restoration_scripts/02-omniroute-superproductivity.sh
-# OpenCode CLI + plugin de OmniRoute + wiring de Claude Code (gateway + profiles)
-DOTFILES_PATH="$PWD/dotfiles_template" bash dotfiles_template/restoration_scripts/03-opencode-claude-ai-stack.sh
-
-# Relogin y verifica
-systemctl --user status omniroute --no-pager
-claude mcp list
-opencode auth list
+# 2. OpenCode CLI + the OmniRoute plugin (built from source) + Claude Code gateway wiring
+DOTFILES_PATH="$PWD/dotfiles_template" \
+  bash dotfiles_template/restoration_scripts/03-opencode-claude-ai-stack.sh
 ```
 
-### 2.2 Script `02-omniroute-superproductivity.sh`
+`03-opencode-claude-ai-stack.sh` is idempotent and:
 
-Ver `dotfiles_template/restoration_scripts/02-omniroute-superproductivity.sh` — idempotente, re-ejecutable. Hace:
-
-1. **OmniRoute**
-   - Instala `nvm` Node `24.14.1` (o `22.22.2+`) si no está
-   - `npm install -g omniroute@latest`
-   - Crea `~/.omniroute/.env` con `PORT=20128`, `REQUIRE_API_KEY=false`, `DATA_DIR`, y genera `JWT_SECRET`/`API_KEY_SECRET`/`STORAGE_ENCRYPTION_KEY` si no existen (**nunca los regenera** si ya existen — rompería `storage.sqlite`)
-   - Instala `~/.config/systemd/user/omniroute.service` y `systemctl --user enable --now omniroute`
-   - Espera `http://localhost:20128/v1/models` y parchea `ANTHROPIC_BASE_URL` en `~/.claude/settings.json`
-
-2. **Super Productivity (estable)**
-   - Prefiere `.deb` nativo (`johannesjo/super-productivity` releases), fallback a Flatpak
-
-3. **SP-MCP**
-   - `pip install "mcp==1.12.4"` (pin, 2.x rompe `list_tools`)
-   - Clona `organicmoron/SP-MCP` → `~/.local/share/super-productivity-mcp/`
-   - Configura `~/.claude/.mcp.json` y `~/.config/opencode/opencode.json` (merge, no overwrite)
-
-### 2.3 Script `03-opencode-claude-ai-stack.sh` (nuevo, 2026-09-28)
-
-Ver `dotfiles_template/restoration_scripts/03-opencode-claude-ai-stack.sh`. Hace:
-
-1. **OpenCode CLI**: instala si falta (`curl -fsSL https://opencode.ai/install | bash`)
-2. **`@omniroute/opencode-plugin`**: clona `github.com/diegosouzapw/OmniRoute`, hace
-   `npm install && npm run build` sobre `@omniroute/opencode-plugin`, y copia
-   `dist/` + `package.json` a `~/.config/opencode/plugins/omniroute` (no está publicado
-   en npm, por eso se compila desde fuente en vez de instalarlo como dependencia)
-3. **`opencode.json`**: agrega (merge idempotente, sin pisar lo existente)
-   - plugins: `opencode-antigravity-auth@1.6.0` + el plugin local de OmniRoute
-     (`providerId: "omniroute"`, `baseURL: http://localhost:20128`)
-   - `model` por defecto: `opencode-omniroute/cc/claude-sonnet-5`
-   - `mcp.codebase-memory-mcp` / `mcp.super-productivity` **solo si el binario ya existe**
-     (son dependencias externas, no las instala este script)
-4. **`~/.claude/settings.json`**: agrega `ANTHROPIC_BASE_URL`,
-   `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, `ENABLE_TOOL_SEARCH=true`
-   (nunca toca `OMNIROUTE_API_KEY` si ya existe)
-5. **`~/.claude/profiles/<name>/settings.json`**: escribe 3 perfiles de ejemplo
+1. Installs the OpenCode CLI if missing (`curl -fsSL https://opencode.ai/install | bash`).
+2. Clones `github.com/diegosouzapw/OmniRoute`, runs `npm install && npm run build` on
+   `@omniroute/opencode-plugin`, and copies `dist/` + `package.json` into
+   `~/.config/opencode/plugins/omniroute` (there's no published npm package to install
+   directly, so it's built from source; re-run with `FORCE_REBUILD_OMNIROUTE_PLUGIN=1`
+   to rebuild).
+3. Merges (never overwrites) `~/.config/opencode/opencode.json`: adds
+   `opencode-antigravity-auth@1.6.0` and the local OmniRoute plugin
+   (`providerId: "omniroute"`, `baseURL: http://localhost:20128`) to `plugin[]`, and a
+   default model. Only adds `mcp.codebase-memory-mcp` / `mcp.super-productivity` entries
+   if those binaries already exist on the machine.
+4. Merges `~/.claude/settings.json`: `ANTHROPIC_BASE_URL`,
+   `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, `ENABLE_TOOL_SEARCH=true`. Never
+   touches `OMNIROUTE_API_KEY` if one is already set.
+5. Writes example profiles to `~/.claude/profiles/<name>/settings.json`
    (`claude-with-free-fallback`, `go-with-claude-fallback`, `opencode-zen-qwen3-6-plus`)
-   que se usan así:
-   ```bash
-   claude --settings ~/.claude/profiles/go-with-claude-fallback/settings.json
-   ```
-6. Imprime los **pasos manuales** que siguen (sección 3) — no se pueden scriptear porque
-   OmniRoute guarda providers/combos cifrados en `~/.omniroute/storage.sqlite`.
+   if they don't already exist.
+6. Prints the manual steps below — these can't be scripted because OmniRoute keeps
+   provider credentials and combo definitions encrypted in `~/.omniroute/storage.sqlite`,
+   not in a plain file.
 
-### 2.4 Pasos manuales (obligatorios, una sola vez por máquina)
+## Manual steps (once per machine, not scriptable)
 
-1. Abre el dashboard de OmniRoute: `http://localhost:20128`
-   - Primer login: usuario/`INITIAL_PASSWORD` de `~/.omniroute/.env`, cámbiala.
-2. **Settings → Providers**: conecta las credenciales que quieras usar en combos:
-   - Anthropic (API key)
-   - OpenAI (API key)
-   - Google (API key)
-   - Z.AI (API key)
-   - **OpenCode Zen** (API key desde `opencode.ai` / cuenta OpenCode)
-   - **OpenCode Go** (login desde la cuenta OpenCode con el plan Go activo)
-3. **Settings → Models**: crea los modelos "combo" (cadenas de fallback) referenciados
-   por los perfiles de Claude Code, p. ej.:
-   - `claude-with-free-fallback` → Claude Sonnet, fallback a un modelo gratis/barato
-   - `go-with-claude-fallback` → OpenCode Go primero, fallback a Claude
-   - (`opencode-zen/qwen3.6-plus` no necesita combo — es un modelo nativo de Zen)
-4. Cierra el handshake de OpenCode ↔ OmniRoute:
+1. Open the OmniRoute dashboard at `http://localhost:20128`. First run: log in with
+   `INITIAL_PASSWORD` from `~/.omniroute/.env`, then change it.
+2. **Settings → Providers**: connect whichever upstream credentials you want available
+   to combos — Anthropic, OpenAI, Google, Z.AI, **OpenCode Zen** (API key from an
+   OpenCode account), **OpenCode Go** (log in with the account that holds the Go plan).
+3. **Settings → Models**: create the "combo" (fallback chain) models referenced by the
+   profiles step 5 above wrote, for example:
+   - `claude-with-free-fallback` → Claude Sonnet, falling back to a free/cheap model
+   - `go-with-claude-fallback` → OpenCode Go first, falling back to Claude
+   - `opencode-zen/qwen3.6-plus` needs no combo — it's a native Zen model
+   Or just edit `~/.claude/profiles/*/settings.json` to point at whatever combo names
+   you actually create.
+4. Complete the OpenCode ↔ OmniRoute auth handshake:
    ```bash
-   opencode auth login   # elige "omniroute", sigue el flujo /connect
+   opencode auth login   # choose "omniroute", follow the /connect flow
    ```
-5. Verifica:
+5. Verify:
    ```bash
    claude mcp list
-   opencode auth list                 # debe listar: omniroute, opencode-go, opencode-zen (si lo conectaste), etc.
+   opencode auth list                 # expect: omniroute, opencode-go, opencode-zen (if connected), ...
    claude --settings ~/.claude/profiles/go-with-claude-fallback/settings.json -p "ping"
    ```
 
-### 2.5 Variables sensibles
+## Sensitive files
 
-| Archivo | Clave | Origen |
-|---|---|---|
-| `~/.omniroute/.env` | `JWT_SECRET`, `API_KEY_SECRET`, `STORAGE_ENCRYPTION_KEY` | Generado en primera instalación, **no regenerar** (rompe credenciales en `storage.sqlite`) |
-| `~/.omniroute/storage.sqlite` | credenciales de todos los providers (Anthropic/OpenAI/Google/Z.AI/OpenCode Zen/Go) | Cifrado con `STORAGE_ENCRYPTION_KEY`; se configura solo desde el dashboard, no hay archivo plano que templetear |
-| `~/.claude/settings.json` | `OMNIROUTE_API_KEY` | Dashboard de OmniRoute → Settings → API Keys (solo si `REQUIRE_API_KEY=true`) |
-| `~/.local/share/opencode/auth.json` | `google`, `openai`, `zai`, `anthropic`, `opencode-go`, `opencode-omniroute` | `opencode auth login <provider>` por cada uno |
+| File | Holds | Source |
+| --- | --- | --- |
+| `~/.omniroute/.env` | `JWT_SECRET`, `API_KEY_SECRET`, `STORAGE_ENCRYPTION_KEY` | generated on first install, **never regenerate** — invalidates `storage.sqlite` |
+| `~/.omniroute/storage.sqlite` | every provider credential (Anthropic/OpenAI/Google/Z.AI/OpenCode Zen/Go) | encrypted with `STORAGE_ENCRYPTION_KEY`; set only from the dashboard, no plain file to template |
+| `~/.claude/settings.json` | `OMNIROUTE_API_KEY` | OmniRoute dashboard → Settings → API Keys, only needed if `REQUIRE_API_KEY=true` |
+| `~/.local/share/opencode/auth.json` | `google`, `openai`, `zai`, `anthropic`, `opencode-go`, `opencode-omniroute` | `opencode auth login <provider>`, one at a time |
 
-Backup: `~/.omniroute/storage.sqlite` + `.env` → Dropbox/dotfiles (encriptado, nunca en claro en este repo).
+Back up `~/.omniroute/storage.sqlite` + `.env` the same way as the rest of this repo's
+secrets: encrypted, never committed in the clear.
 
----
+## Troubleshooting
 
-## 3. Configuración Manual (si no usas dotly)
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `curl :20128` connection refused | `omniroute.service` isn't running | `systemctl --user restart omniroute; journalctl --user -u omniroute -n 50` |
+| `ANTHROPIC_BASE_URL` ignored by Claude Code | `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` unset or `0` | set it to `1` in `~/.claude/settings.json` |
+| `opencode auth list` doesn't show `omniroute` | `/connect` handshake never completed | `opencode auth login` → pick `omniroute` |
+| OpenCode can't find the OmniRoute plugin | `~/.config/opencode/plugins/omniroute/dist/index.js` missing or build failed | re-run `03-opencode-claude-ai-stack.sh FORCE_REBUILD_OMNIROUTE_PLUGIN=1` |
+| A Claude Code profile's model (e.g. `go-with-claude-fallback`) 404s / "model not found" | that combo doesn't exist yet in this machine's OmniRoute dashboard | create it under Settings → Models with the exact same name, or edit the profile |
+| `pencil` MCP fails to connect | it's a desktop app's AppImage mount, not something dotly installs | open the Pencil desktop app, or drop it from `~/.claude/settings.json` / `opencode.json` if unused here |
 
-### OmniRoute
-```bash
-nvm install 24.14.1 && nvm use 24.14.1
-npm install -g omniroute@latest
-mkdir -p ~/.omniroute
-cat > ~/.omniroute/.env <<'EOF'
-PORT=20128
-DATA_DIR=/home/$USER/.omniroute
-REQUIRE_API_KEY=false
-OMNIROUTE_SERVER_HOST=127.0.0.1
-JWT_SECRET=$(openssl rand -base64 32)
-API_KEY_SECRET=$(openssl rand -hex 16)
-STORAGE_ENCRYPTION_KEY=$(openssl rand -hex 32)
-EOF
-mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/omniroute.service <<EOF
-[Unit]
-Description=OmniRoute AI gateway
-After=network-online.target
-[Service]
-Type=simple
-Environment=NODE_ENV=production
-Environment=DATA_DIR=%h/.omniroute
-Environment=PATH=%h/.nvm/versions/node/v24.14.1/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=%h/.omniroute/.env
-ExecStart=%h/.nvm/versions/node/v24.14.1/bin/node %h/.nvm/versions/node/v24.14.1/lib/node_modules/omniroute/bin/omniroute.mjs serve --no-open --no-tray
-Restart=on-failure
-[Install]
-WantedBy=default.target
-EOF
-systemctl --user daemon-reload && systemctl --user enable --now omniroute
-curl http://localhost:20128/v1/models | jq .
-```
+## Open items
 
-### OpenCode CLI + OmniRoute plugin
-```bash
-curl -fsSL https://opencode.ai/install | bash
-
-git clone --depth 1 https://github.com/diegosouzapw/OmniRoute /tmp/OmniRoute
-cd /tmp/OmniRoute/@omniroute/opencode-plugin && npm install && npm run build
-mkdir -p ~/.config/opencode/plugins/omniroute
-cp -r dist package.json ~/.config/opencode/plugins/omniroute/
-
-# Merge into ~/.config/opencode/opencode.json:
-#   "plugin": ["opencode-antigravity-auth@1.6.0",
-#              ["./plugins/omniroute/dist/index.js",
-#               {"providerId":"omniroute","baseURL":"http://localhost:20128","features":{"usableOnly":false}}]]
-opencode auth login   # -> omniroute
-```
-
-### Claude Code → OmniRoute gateway
-```bash
-python3 <<'PY'
-import json, pathlib
-p = pathlib.Path.home() / ".claude/settings.json"
-d = json.loads(p.read_text()) if p.exists() else {}
-d.setdefault("env", {}).update({
-    "ANTHROPIC_BASE_URL": "http://localhost:20128",
-    "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
-})
-p.write_text(json.dumps(d, indent=2))
-PY
-```
-
-### Super Productivity .deb (recomendado)
-```bash
-flatpak uninstall -y com.superproductivity.SuperProductivity 2>/dev/null || true
-latest=$(curl -s https://api.github.com/repos/johannesjo/super-productivity/releases/latest | jq -r '.assets[] | select(.name | endswith("_amd64.deb")) | .browser_download_url' | head -n1)
-wget -O /tmp/super-productivity.deb "$latest" && sudo dpkg -i /tmp/super-productivity.deb || sudo apt -f install -y
-```
-
-### SP-MCP
-```bash
-pip3 install "mcp==1.12.4" --break-system-packages
-git clone https://github.com/organicmoron/SP-MCP /tmp/SP-MCP
-MCP_DIR="$HOME/.local/share/super-productivity-mcp"
-mkdir -p "$MCP_DIR/plugin_commands" "$MCP_DIR/plugin_responses"
-cp /tmp/SP-MCP/mcp_server.py /tmp/SP-MCP/merge_config.py "$MCP_DIR/"
-# Luego en Super Productivity: Settings → Plugins → Upload plugin.zip
-```
-
----
-
-## 4. Troubleshooting
-
-| Síntoma | Causa | Fix |
-|---|---|---|
-| `AttributeError: 'Server' has no attribute 'list_tools'` | `mcp` 2.x instalado | `pip install "mcp==1.12.4"` |
-| `Timeout waiting for response to addTask` (30s) | Flatpak `XDG_DATA_HOME` mismatch | Migrar a .deb o aplicar symlink + override + re-upload plugin |
-| `curl 20128` connection refused | `omniroute.service` no corre | `systemctl --user restart omniroute; journalctl --user -u omniroute -n 50` |
-| `ANTHROPIC_BASE_URL` ignora gateway | `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=0` | Pon `1` en `~/.claude/settings.json` |
-| Plugin no aparece en `claude mcp list` | `.mcp.json` mal formado | `cat ~/.claude/.mcp.json \| jq .` y `claude mcp list` |
-| `opencode auth list` no muestra `omniroute` | Falta el `/connect` handshake | `opencode auth login` → elegir `omniroute` |
-| OpenCode no encuentra el plugin de OmniRoute | `~/.config/opencode/plugins/omniroute/dist/index.js` no existe o build falló | Re-correr `03-opencode-claude-ai-stack.sh` con `FORCE_REBUILD_OMNIROUTE_PLUGIN=1` |
-| Modelo de un perfil de Claude (`go-with-claude-fallback`, etc.) da 404/"model not found" | El combo no existe todavía en el dashboard de OmniRoute en esta máquina | Crear el combo en Settings → Models con el mismo nombre exacto |
-| `pencil` MCP no conecta | Es una app de escritorio (AppImage montado en `/tmp/.mount_Pen-*`), no algo que dotly instale | Abrir la app de escritorio Pencil; si no la usas en esta máquina, quítalo de `~/.claude/settings.json` / `opencode.json` |
-
-## 5. Próximos pasos
-
-- [ ] Publicar `@omniroute/opencode-plugin` en npm para no tener que compilarlo desde fuente en cada máquina
-- [ ] Documentar cómo exportar/importar los "combos" de OmniRoute (actualmente 100% manual vía dashboard)
-- [ ] Backup cifrado de `~/.omniroute/.env` + `storage.sqlite` en dotfiles privado
-- [ ] Evaluar mover `codebase-memory-mcp` / `headroom` a scripts propios de dotly si se vuelven parte fija del setup
-
----
-*Actualizado 2026-09-28 — stack verificado en vivo en PC `ed`: OmniRoute 3.8.50, Node 24.14.1 (omniroute) / 22.22.2 (default), Claude Code 2.1.246, OpenCode 1.18.32, @omniroute/opencode-plugin 0.2.1, opencode-antigravity-auth 1.6.0, SP 18.21.2.*
+- [ ] Publish `@omniroute/opencode-plugin` to npm so machines don't need to build it from source
+- [ ] Document exporting/importing OmniRoute's "combos" (currently 100% manual, dashboard-only)
+- [ ] Encrypted backup of `~/.omniroute/.env` + `storage.sqlite` in the private dotfiles store
+- [ ] Decide whether `codebase-memory-mcp` / `headroom` become first-class dotly scripts if they stay part of the standard setup
